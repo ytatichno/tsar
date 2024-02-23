@@ -112,6 +112,7 @@ private:
   bool mDumpAST = false;
   bool mEmitLLVM = false;
   bool mInstrLLVM = false;
+  bool mInstrOptRegionExchange = false;
   bool mCheck = false;
   bool mPrint = false;
   bool mServer = false;

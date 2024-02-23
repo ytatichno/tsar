@@ -115,6 +115,7 @@ struct Options : private bcl::Uncopyable {
   llvm::cl::opt<bool> InstrLLVM;
   llvm::cl::opt<std::string> InstrEntry;
   llvm::cl::list<std::string> InstrStart;
+  llvm::cl::opt<bool> InstrOptRegionExchange;
   llvm::cl::opt<bool> EmitAST;
   llvm::cl::opt<bool> MergeAST;
   llvm::cl::alias MergeASTA;
@@ -206,6 +207,9 @@ Options::Options() :
   InstrStart("instr-start", cl::cat(CompileCategory), cl::value_desc("functions"),
     cl::ZeroOrMore, cl::ValueRequired, cl::CommaSeparated,
     cl::desc("Add start point for instrumentation")),
+  InstrOptRegionExchange("instr-opt-region-exchange", cl::cat(CompileCategory),
+    cl::desc("Perform instrumentation for actual/get_actual pragmas. "
+    "--instr-llvm must be enabled")),
   EmitAST("emit-ast", cl::cat(CompileCategory),
     cl::desc("Emit Clang AST files for source inputs")),
   MergeAST("merge-ast", cl::cat(CompileCategory),
@@ -645,9 +649,16 @@ void Tool::storeCLOptions() {
   mInstrLLVM = addIfSet(Options::get().InstrLLVM);
   mInstrEntry = Options::get().InstrEntry;
   mInstrStart = Options::get().InstrStart;
+  mInstrOptRegionExchange = Options::get().InstrOptRegionExchange;
   if (!mInstrLLVM && (!mInstrEntry.empty() || !mInstrStart.empty()))
     errs() << "WARNING: Instrumentation options are ignored when "
               "-instr-llvm is not set.\n";
+  if (mInstrOptRegionExchange && !mInstrLLVM){
+    const std::string Msg("error - --instr-llvm must be enabled for any "
+    "--instr-opt-%");
+    Options::get().InstrOptRegionExchange.error(Msg);
+    exit(1);
+  }
   mCheck = addLLIfSet(addIfSet(Options::get().Check));
   mLoadSources = !addIfSetIf(Options::get().NoLoadSources, mTfmPass || mCheck);
   if (Options::get().LoadSources && Options::get().NoLoadSources) {
