@@ -67,6 +67,8 @@ protected:
 };
 
 /// This action wraps other action and setups pragma handlers.
+/// PCH - PreCompiled Header.
+/// Name of this class refers to the @ref clang::GeneratePCHAction
 class GenPCHPragmaAction : public PublicWrapperFrontendAction {
 public:
   GenPCHPragmaAction(std::unique_ptr<clang::FrontendAction> WrappedAction)
@@ -75,6 +77,23 @@ public:
   bool BeginSourceFileAction(clang::CompilerInstance& CI) override;
   void EndSourceFileAction() override;
 private:
+  llvm::SmallVector<PragmaNamespaceReplacer *, 1> mNamespaces;
+  clang::Preprocessor* mPP = nullptr;
+};
+
+/// This action wraps other action and setups
+/// pragma handlers for region exchange insrumentation.
+/// Copy of @ref tsar::GenPCHPragmaAction
+/// but with pragma instrumentation via handlers
+class AddPragmaHandlersAction : public PublicWrapperFrontendAction {
+public:
+  AddPragmaHandlersAction(std::unique_ptr<clang::FrontendAction> WrappedAction)
+    : PublicWrapperFrontendAction(WrappedAction.release()) {}
+
+  bool BeginSourceFileAction(clang::CompilerInstance& CI) override;
+  void EndSourceFileAction() override;
+private:
+  // @todo another vector
   llvm::SmallVector<PragmaNamespaceReplacer *, 1> mNamespaces;
   clang::Preprocessor* mPP = nullptr;
 };

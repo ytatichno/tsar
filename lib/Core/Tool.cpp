@@ -851,10 +851,19 @@ int Tool::run(QueryManager *QM) {
     return CTool.run(
         newClangActionFactory<tsar::ASTPrintAction, tsar::GenPCHPragmaAction>()
             .get());
-  auto CRes{
-      CTool.run(newClangActionFactory<ClangMainAction, GenPCHPragmaAction>(
+
+  int CRes = 0;
+  if(mInstrOptRegionExchange){
+    CRes =
+      CTool.run(newClangActionFactory<ClangMainAction, AddPragmaHandlersAction>(
                     std::forward_as_tuple(*mCompilations, *QM))
-                    .get())};
+                    .get());
+  } else {
+    CRes =
+        CTool.run(newClangActionFactory<ClangMainAction, GenPCHPragmaAction>(
+                      std::forward_as_tuple(*mCompilations, *QM))
+                      .get());
+  }
   int FortranRes{0};
 #ifdef FLANG_FOUND
   FlangTool FortranTool(*mCompilations, FortranSources);

@@ -58,7 +58,25 @@ bool GenPCHPragmaAction::BeginSourceFileAction(CompilerInstance &CI) {
 void GenPCHPragmaAction::EndSourceFileAction() {
   WrapperFrontendAction::EndSourceFileAction();
   using ItrTy =
-    pointer_iterator<pointee_iterator<decltype(mNamespaces)::iterator>>;
-  RemovePragmaHandlers(*mPP,
-    ItrTy(mNamespaces.begin()), ItrTy(mNamespaces.end()));
+      pointer_iterator<pointee_iterator<decltype(mNamespaces)::iterator>>;
+  RemovePragmaHandlers(*mPP, ItrTy(mNamespaces.begin()),
+                       ItrTy(mNamespaces.end()));
+}
+
+bool AddPragmaHandlersAction::BeginSourceFileAction(CompilerInstance &CI) {
+  CI.getLangOpts().CompilingPCH = true;
+  mPP = &CI.getPreprocessor();
+  AddPragmaHandlers(*mPP);
+  if (!WrapperFrontendAction::BeginSourceFileAction(CI)) {
+    return false;
+  }
+  return true;
+}
+
+void AddPragmaHandlersAction::EndSourceFileAction() {
+  WrapperFrontendAction::EndSourceFileAction();
+  using ItrTy =
+      pointer_iterator<pointee_iterator<decltype(mNamespaces)::iterator>>;
+  RemovePragmaHandlers(*mPP, ItrTy(mNamespaces.begin()),
+                       ItrTy(mNamespaces.end()));
 }
