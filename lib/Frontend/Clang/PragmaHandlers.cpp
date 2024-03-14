@@ -25,6 +25,8 @@
 #include "tsar/Frontend/Clang/PragmaHandlers.h"
 #include "tsar/Frontend/Clang/ClauseVisitor.h"
 #include "tsar/Frontend/Clang/ExternalPreprocessor.h"
+#include <llvm/Support/raw_ostream.h>
+
 
 using namespace clang;
 using namespace llvm;
@@ -36,12 +38,14 @@ using namespace tsar;
 namespace {
 inline void AddToken(tok::TokenKind K, SourceLocation Loc, unsigned Len,
     SmallVectorImpl<Token> &TokenList) {
+
   Token Tok;
   Tok.startToken();
   Tok.setKind(K);
   Tok.setLocation(Loc);
   Tok.setLength(Len);
   TokenList.push_back(Tok);
+  // llvm::outs()<<tok::getTokenName(K)<<' ';
 }
 
 template<class PreprocessorT >
@@ -50,8 +54,63 @@ inline void AddStringToken(StringRef Str, SourceLocation Loc, PreprocessorT &PP,
   Token Tok;
   Tok.startToken();
   Tok.setKind(tok::string_literal);
-  PP.CreateString(("\"" + Str + "\"").str(), Tok, Loc, Loc);
+  PP.CreateString(("\"" + Str + "\"").str(), Tok, Loc, Loc.getLocWithOffset(Str.size()+2));
+  Tok.setLength(Str.size()+2);
   TokenList.push_back(Tok);
+  // llvm::outs()<<'\"'<<Str<<'\"'<<' ';
+}
+
+void ReplacePragmaWithCall(SmallVectorImpl<Token> &TokenQueue,
+                           clang::Preprocessor &PP, StringRef FunctionName,
+                           clang::Token &FirstToken) {
+
+  llvm::outs()<<'\n';
+  SourceLocation DirectiveLoc = FirstToken.getLocation();
+
+  // reading existing pragma tokens
+  do {
+    // saving initial pragma
+    // AddToken(FirstToken.getKind(), FirstToken.getLocation(),
+    //          FirstToken.getLength(), OldTokenQueue);
+    PP.LexUnexpandedToken(FirstToken);
+    llvm::outs() << tok::getTokenName(FirstToken.getKind()) << ' ';
+
+    // if (FirstToken.is(tok::identifier)) {
+    //   StringRef Identifier = FirstToken.getIdentifierInfo()->getName();
+    //   // llvm::outs() << Identifier;
+    //   AddStringToken(Identifier, FirstToken.getLocation(), PP, TokenQueue);
+    // } else if (FirstToken.is(tok::comma)) {
+    //   // llvm::outs() << ',';
+    //   AddToken(tok::comma, FirstToken.getLocation(), 1, TokenQueue);
+    // }
+  } while (!FirstToken.is(tok::eod));
+    llvm::outs()<<'\n';
+
+
+  // create and push printf("hello_string") tokens
+  std::string PrintName{"printf"};
+  std::string DebugStr{"hello_string"};
+
+  Token FunctionNameToken;
+  FunctionNameToken.startToken();
+  FunctionNameToken.setKind(tok::identifier);
+  PP.CreateString(PrintName, FunctionNameToken, DirectiveLoc,
+                  DirectiveLoc.getLocWithOffset(PrintName.size()));
+  FunctionNameToken.setLength(PrintName.size());
+  FunctionNameToken.setIdentifierInfo(PP.getIdentifierInfo(PrintName));
+  TokenQueue.push_back(FunctionNameToken);
+
+  SourceLocation AfterPrintLoc = DirectiveLoc.getLocWithOffset(PrintName.size());
+
+  AddToken(tok::l_paren, AfterPrintLoc, 1, TokenQueue);
+  AddStringToken(DebugStr, AfterPrintLoc.getLocWithOffset(1), PP, TokenQueue);
+
+  SourceLocation AfterDebugStrLoc = AfterPrintLoc.getLocWithOffset(DebugStr.size()+1);
+
+  AddToken(tok::r_paren, AfterDebugStrLoc, 1, TokenQueue);
+  AddToken(tok::semi, AfterDebugStrLoc.getLocWithOffset(1), 1, TokenQueue);
+
+  llvm::outs()<<'\n';
 }
 
 template<class PreprocessorT, class ReplacementT>
@@ -267,5 +326,27 @@ void ClauseReplacer::HandleBody(ExternalPreprocessor &PP,
   DefaultClauseVisitor<ExternalPreprocessor, ReplacementT> CV(PP,
                                                               getReplacement());
   CV.visitBody(Prototype.begin(), Prototype.end(), FirstToken);
+}
+
+void DvmActualReplacer::HandlePragma(clang::Preprocessor &PP,
+    clang::PragmaIntroducer Introducer, clang::Token &FirstToken) {
+
+  llvm::outs() << "DvmActualReplacer::HandlePragma  clasuses ";
+  llvm::SmallVector<clang::Token, 32> TokenQueue;
+
+  ReplacePragmaWithCall(TokenQueue, PP, RegPragmaFunctionName, FirstToken);
+
+  llvm::outs()<<" Pragma done\n";
+  for(auto it = TokenQueue.begin(); it != TokenQueue.end(); it++){
+      llvm::outs()<<tok::getTokenName(it->getKind())<<' ';
+      if(it->getKind() == tok::string_literal)
+        llvm::outs() << '{' << it->getLiteralData() << '}' << ' ';
+      if(it->getKind() == tok::identifier)
+        llvm::outs() << '{' << it->getIdentifierInfo()->getName() << '}' << ' ';
+  }
+  llvm::outs()<<'\n';
+  PP.EnterTokenStream(TokenQueue, true, false);
+
+  llvm::outs()<<"pushed it \n";
 }
 }
