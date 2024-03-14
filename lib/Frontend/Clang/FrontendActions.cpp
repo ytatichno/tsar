@@ -48,7 +48,7 @@ tsar::ASTDumpAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
 bool GenPCHPragmaAction::BeginSourceFileAction(CompilerInstance &CI) {
   CI.getLangOpts().CompilingPCH = true;
   mPP = &CI.getPreprocessor();
-  AddPragmaHandlers(*mPP, mNamespaces);
+  AddTsarPragmaHandlers(*mPP, mNamespaces);
   if (!WrapperFrontendAction::BeginSourceFileAction(CI)) {
     return false;
   }
@@ -66,7 +66,7 @@ void GenPCHPragmaAction::EndSourceFileAction() {
 bool AddPragmaHandlersAction::BeginSourceFileAction(CompilerInstance &CI) {
   CI.getLangOpts().CompilingPCH = true;
   mPP = &CI.getPreprocessor();
-  AddPragmaHandlers(*mPP);
+  AddDvmPragmaHandlers(*mPP);
   if (!WrapperFrontendAction::BeginSourceFileAction(CI)) {
     return false;
   }

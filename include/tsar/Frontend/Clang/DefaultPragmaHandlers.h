@@ -33,7 +33,15 @@
 
 namespace tsar {
 template<class ContainerT>
-void AddPragmaHandlers(clang::Preprocessor &PP, ContainerT &C) {
+/**
+ * @brief stub that can be modified to
+ * attach tsar pragma handlers
+ * only for "#pragma tsar ..."
+ * @todo change the container type
+ * @param PP preprocessor instance, can be obtained from compiler instance
+ * @param C container where pragma namespace handler should be emplaced
+ */
+void AddTsarPragmaHandlers(clang::Preprocessor &PP, ContainerT &C) {
   for (auto NId = DirectiveNamespaceId::NotNamespace + 1;
        NId < DirectiveNamespaceId::NumNamespaces; ++NId) {
     auto NR = new PragmaNamespaceReplacer(NId);
@@ -53,6 +61,31 @@ void AddPragmaHandlers(clang::Preprocessor &PP, ContainerT &C) {
           PR->AddPragma(new ClauseReplacer(CId, *PR));
     }
   }
+}
+/**
+ * @brief attaches all pragma handlers with dvm namespace
+ * presents handlers only for actual/get_actual directives
+ *
+ * @todo add container to store namespace in
+ * @param PP preprocessor instance
+ */
+void AddDvmPragmaHandlers(clang::Preprocessor &PP){
+
+  // for better control over tokens processing and
+  // if you want to use tsar::ExternalPreprocessor for lexing backtracing
+  // write your own class derived from @ref clang::PragmaNamespace
+  // you can peep at @ref tsar::PragmaNamespaceReplacer
+  // or at https://clang.llvm.org/doxygen/Pragma_8cpp_source.html#l00092
+  auto NamespaceHandler = new clang::PragmaNamespace{
+    getName(DirectiveNamespaceId::Dvm)
+  };
+
+
+  // clang::PragmaNamespace can be differed from other pragma handlers as
+  // namespace handler via method @ref clang::PragmaNamespace::getIfNamespace
+  PP.AddPragmaHandler(NamespaceHandler);
+  NamespaceHandler->AddPragma(new DvmActualReplacer);
+  NamespaceHandler->AddPragma(new DvmGetActualReplacer);
 }
 
 template<class ItrT>
