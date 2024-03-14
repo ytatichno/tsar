@@ -38,6 +38,9 @@
 #include <clang/Lex/Token.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
+#include <llvm/Support/raw_ostream.h>
+
+
 
 namespace tsar {
 class ExternalPreprocessor;
@@ -206,6 +209,7 @@ public:
 
   /// Handles namespace name and forwards processing of subsequent tokens
   /// to child handlers of directives.
+  /// overrides @ref claang::PragmaHandler::HandlePragma
   void HandlePragma(clang::Preprocessor &PP,
     clang::PragmaIntroducer Introducer, clang::Token &FirstToken) override;
 
@@ -253,5 +257,103 @@ inline const ClauseReplacer::ReplacementT &
 ClauseReplacer::getReplacement() const noexcept {
   return mParent->getReplacement();
 }
+
+// /**
+//  * @brief univevrsal class that contains
+//  * different pragma directives' handlers.
+//  *
+//  * Unlike @ref PragmaNamespaceReplacer,
+//  * this class has more flexible structure,
+//  * i.e. it can call virtual handlers
+//  * with different definitions
+//  */
+// class PragmaNamespaceHandler :
+  // public clang::PragmaNamespace {
+
+// protected:
+//   using ReplacementT = llvm::SmallVector<clang::Token, 32U>;
+//   ReplacementT mTokenQueue;
+//   DirectiveNamespaceId mNamespaceId;
+//   /// map that stores ptr to handler function by string
+//   // void (*mDirectiveHandlers)(ExternalPreprocessor &PP,
+//   // clang::PragmaIntroducerKind Introducer, clang::Token &FirstToken);
+
+//   /// map that stores ptrs to handler classes derived from clang::PragmaHandler
+//   llvm::StringMap<std::unique_ptr<clang::PragmaHandler>> mHandlers;
+
+
+// public:
+
+//   /// Creates handler for a specified namespace.
+//   explicit PragmaNamespaceHandler(DirectiveNamespaceId Id) :
+//     clang::PragmaHandler(tsar::getName(Id)), mNamespaceId(Id) { }
+
+//   /// Handles namespace name and forwards processing of subsequent tokens
+//   /// to child handlers of directives.
+//   /// overrides @ref clang::PragmaHandler::HandlePragma
+//   void HandlePragma(clang::Preprocessor &PP,
+//     clang::PragmaIntroducer Introducer, clang::Token &FirstToken) override;
+
+//   /// Returns common replacement(token seq) for all handlers in hierarchy.
+//   ReplacementT & getReplacement() noexcept { return mTokenQueue; }
+
+//   /// Returns common replacement(token seq) for all handlers in hierarchy.
+//   const ReplacementT & getReplacement() const noexcept { return mTokenQueue; }
+
+//   /// Returns ID of namespace being processed.
+//   DirectiveNamespaceId getNamespaceId() const noexcept { return mNamespaceId; }
+
+//   /**
+//    * @brief attach handler to directive in this namespace
+//    *
+//    * @param Name directive name
+//    * @param Handler handler to attach
+//    */
+//   void attachDirectiveHandler(llvm::StringRef Name,
+//                               clang::PragmaHandler *Handler) {
+//     mDirectiveHandlers.insert(std::pair{Name, Handler});
+//   }
+
+
+
+// };
+
+class DvmActualReplacer :
+  public clang::PragmaHandler {
+
+public:
+  inline static const std::string RegPragmaFunctionName = "sapforRegActual";
+  DvmActualReplacer() : clang::PragmaHandler("actual") {}
+  ~DvmActualReplacer() override { }
+
+/**
+ * @brief transforms \code #pragma dvm actual(a,b,c) \endcode
+ *
+ * into \code RegActual("a", "b", "c"); \endcode
+ *
+ * @param PP Preprocessor instance
+ * @param Introducer
+ * @param FirstToken Token to start from
+ */
+  void HandlePragma(clang::Preprocessor &PP,
+    clang::PragmaIntroducer Introducer, clang::Token &FirstToken) override;
+};
+
+class DvmGetActualReplacer :
+  public clang::PragmaHandler {
+
+public:
+  inline static const std::string RegPragmaFunctionName = "sapforRegGetActual";
+
+  DvmGetActualReplacer() : clang::PragmaHandler("get_actual") { }
+  ~DvmGetActualReplacer() override { }
+  void HandlePragma(clang::Preprocessor &PP,
+    clang::PragmaIntroducer Introducer, clang::Token &FirstToken) override {
+    llvm::outs() << "GetActual FirstToken: "
+      << FirstToken.getName() << '\n';
+  }
+
+};
+
 }
 #endif//TSAR_PRAGMA_HANDLERS_H
