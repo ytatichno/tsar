@@ -76,14 +76,14 @@ def read_var : Intrinsic<"sapforReadVar", tsar_void_ty,
                         [tsar_di_loc_ty, tsar_addr_ty, tsar_di_var_ty]>;
 
 def read_arr : Intrinsic<"sapforReadArr", tsar_void_ty,
-                        [tsar_di_loc_ty, tsar_addr_ty, tsar_di_var_ty, 
+                        [tsar_di_loc_ty, tsar_addr_ty, tsar_di_var_ty,
                         tsar_arr_base_ty]>;
 
 def write_var_end : Intrinsic<"sapforWriteVarEnd", tsar_void_ty,
                         [tsar_di_loc_ty, tsar_addr_ty, tsar_di_var_ty]>;
 
 def write_arr_end : Intrinsic<"sapforWriteArrEnd", tsar_void_ty,
-                        [tsar_di_loc_ty, tsar_addr_ty, tsar_di_var_ty, 
+                        [tsar_di_loc_ty, tsar_addr_ty, tsar_di_var_ty,
                         tsar_arr_base_ty]>;
 
 def func_begin : Intrinsic<"sapforFuncBegin",
@@ -116,18 +116,26 @@ def sl_end : Intrinsic<"sapforSLEnd",
 def sl_iter : Intrinsic<"sapforSLIter",
                         tsar_void_ty, [tsar_di_loop_ty, tsar_size_ty]>;
 
-def init_di : Intrinsic<"sapforInitDI", 
-                        tsar_void_ty, 
+def init_di : Intrinsic<"sapforInitDI",
+                        tsar_void_ty,
                         [tsar_di_ty, tsar_di_string_ty, tsar_size_ty]>;
 
-def allocate_pool : Intrinsic<"sapforAllocatePool", 
-                        tsar_void_ty, 
+def allocate_pool : Intrinsic<"sapforAllocatePool",
+                        tsar_void_ty,
                         [tsar_pool_ptr_ty, tsar_size_ty]>;
 
-def decl_types : Intrinsic<"sapforDeclTypes", 
+def decl_types : Intrinsic<"sapforDeclTypes",
                         tsar_void_ty,
                         [tsar_size_ty, tsar_size_ptr_ty, tsar_size_ptr_ty]>;
 
 def ast_reg_var : Intrinsic<"sapforASTRegVar",
                         tsar_void_ty,
                         [tsar_addr_ty]>;
+
+def reg_actual : Intrinsic<"sapforRegActual",
+                        tsar_void_ty,
+                        [tsar_di_string_ty]>;
+
+def reg_get_actual : Intrinsic<"sapforRegGetActual",
+                        tsar_void_ty,
+                        [tsar_di_string_ty]>;
