@@ -25,7 +25,7 @@
 #include "tsar/Frontend/Clang/PragmaHandlers.h"
 #include "tsar/Frontend/Clang/ClauseVisitor.h"
 #include "tsar/Frontend/Clang/ExternalPreprocessor.h"
-#include <llvm/Support/raw_ostream.h>
+#include <sstream>
 
 
 using namespace clang;
@@ -45,7 +45,6 @@ inline void AddToken(tok::TokenKind K, SourceLocation Loc, unsigned Len,
   Tok.setLocation(Loc);
   Tok.setLength(Len);
   TokenList.push_back(Tok);
-  // llvm::outs()<<tok::getTokenName(K)<<' ';
 }
 
 template<class PreprocessorT >
@@ -57,60 +56,6 @@ inline void AddStringToken(StringRef Str, SourceLocation Loc, PreprocessorT &PP,
   PP.CreateString(("\"" + Str + "\"").str(), Tok, Loc, Loc.getLocWithOffset(Str.size()+2));
   Tok.setLength(Str.size()+2);
   TokenList.push_back(Tok);
-  // llvm::outs()<<'\"'<<Str<<'\"'<<' ';
-}
-
-void ReplacePragmaWithCall(SmallVectorImpl<Token> &TokenQueue,
-                           clang::Preprocessor &PP, StringRef FunctionName,
-                           clang::Token &FirstToken) {
-
-  llvm::outs()<<'\n';
-  SourceLocation DirectiveLoc = FirstToken.getLocation();
-
-  // reading existing pragma tokens
-  do {
-    // saving initial pragma
-    // AddToken(FirstToken.getKind(), FirstToken.getLocation(),
-    //          FirstToken.getLength(), OldTokenQueue);
-    PP.LexUnexpandedToken(FirstToken);
-    llvm::outs() << tok::getTokenName(FirstToken.getKind()) << ' ';
-
-    // if (FirstToken.is(tok::identifier)) {
-    //   StringRef Identifier = FirstToken.getIdentifierInfo()->getName();
-    //   // llvm::outs() << Identifier;
-    //   AddStringToken(Identifier, FirstToken.getLocation(), PP, TokenQueue);
-    // } else if (FirstToken.is(tok::comma)) {
-    //   // llvm::outs() << ',';
-    //   AddToken(tok::comma, FirstToken.getLocation(), 1, TokenQueue);
-    // }
-  } while (!FirstToken.is(tok::eod));
-    llvm::outs()<<'\n';
-
-
-  // create and push printf("hello_string") tokens
-  std::string PrintName{"printf"};
-  std::string DebugStr{"hello_string"};
-
-  Token FunctionNameToken;
-  FunctionNameToken.startToken();
-  FunctionNameToken.setKind(tok::identifier);
-  PP.CreateString(PrintName, FunctionNameToken, DirectiveLoc,
-                  DirectiveLoc.getLocWithOffset(PrintName.size()));
-  FunctionNameToken.setLength(PrintName.size());
-  FunctionNameToken.setIdentifierInfo(PP.getIdentifierInfo(PrintName));
-  TokenQueue.push_back(FunctionNameToken);
-
-  SourceLocation AfterPrintLoc = DirectiveLoc.getLocWithOffset(PrintName.size());
-
-  AddToken(tok::l_paren, AfterPrintLoc, 1, TokenQueue);
-  AddStringToken(DebugStr, AfterPrintLoc.getLocWithOffset(1), PP, TokenQueue);
-
-  SourceLocation AfterDebugStrLoc = AfterPrintLoc.getLocWithOffset(DebugStr.size()+1);
-
-  AddToken(tok::r_paren, AfterDebugStrLoc, 1, TokenQueue);
-  AddToken(tok::semi, AfterDebugStrLoc.getLocWithOffset(1), 1, TokenQueue);
-
-  llvm::outs()<<'\n';
 }
 
 template<class PreprocessorT, class ReplacementT>
@@ -328,25 +273,167 @@ void ClauseReplacer::HandleBody(ExternalPreprocessor &PP,
   CV.visitBody(Prototype.begin(), Prototype.end(), FirstToken);
 }
 
+/**
+ * inserts declaration of sapforRegActual/sapforRegGetActual to @par TokenQueue
+ *
+ * @param FunctionIdentifierInfo IdentifierInfo of func u want to declare
+ */
+void InsertDeclarationForActualInstrumentation(
+    SmallVectorImpl<Token> &TokenQueue,
+    IdentifierInfo *FunctionIdentifierInfo) {
+
+  Token FuncNameTok;
+  FuncNameTok.startToken();
+  FuncNameTok.setKind(tok::identifier);
+  FuncNameTok.setIdentifierInfo(FunctionIdentifierInfo);
+
+  Token ExternTok;
+  ExternTok.startToken();
+  ExternTok.setKind(tok::kw_extern);
+
+  Token VoidTok;
+  VoidTok.startToken();
+  VoidTok.setKind(tok::kw_void);
+
+  Token CharTok;
+  CharTok.startToken();
+  CharTok.setKind(tok::kw_char);
+
+  Token ConstTok;
+  ConstTok.startToken();
+  ConstTok.setKind(tok::kw_const);
+
+  Token StarTok;
+  StarTok.startToken();
+  StarTok.setKind(tok::star);
+
+  Token CommaTok;
+  CommaTok.startToken();
+  CommaTok.setKind(tok::comma);
+
+  Token LParTok;
+  LParTok.startToken();
+  LParTok.setKind(tok::l_paren);
+
+  Token EllipsisTok;
+  EllipsisTok.startToken();
+  EllipsisTok.setKind(tok::ellipsis);
+
+  Token RParTok;
+  RParTok.startToken();
+  RParTok.setKind(tok::r_paren);
+
+  Token SemiTok;
+  SemiTok.startToken();
+  SemiTok.setKind(tok::semi);
+
+  TokenQueue.push_back(ExternTok);
+  TokenQueue.push_back(VoidTok);
+  TokenQueue.push_back(FuncNameTok);
+  TokenQueue.push_back(LParTok);
+  TokenQueue.push_back(ConstTok); // may be char const* instead
+  TokenQueue.push_back(CharTok);
+  TokenQueue.push_back(StarTok);
+
+  TokenQueue.push_back(RParTok);
+  TokenQueue.push_back(SemiTok);
+}
+
+/**
+ * @brief replaces pragma with function call
+ * inserts tokens that will be compiled to call of function
+ * from dyna lib into TokenStream of @link clang::Preprocessor
+ * @param PP preprocessor instance to deal with
+ * @param FunctionName function identifier to insert call
+ * @param FirstToken store directive of pragma
+ */
+void ReplacePragmaWithCall(clang::Preprocessor &PP, StringRef FunctionName,
+                           clang::Token &FirstToken) {
+
+  llvm::SmallVector<clang::Token, 32> TokenQueue;
+  InsertDeclarationForActualInstrumentation(TokenQueue,
+                                            PP.getIdentifierInfo(FunctionName));
+  std::ostringstream IdentifiersStream;
+  SourceLocation DirectiveLocation = FirstToken.getLocation();
+  SourceLocation CurrentLocation = DirectiveLocation;
+  // read pragma tokens
+  Token Tok;
+  IdentifiersStream << '"';
+  do {
+    PP.LexUnexpandedToken(Tok);
+    if (Tok.is(tok::identifier)) {
+      IdentifiersStream << Tok.getIdentifierInfo()->getName().data();
+    } else if (Tok.is(tok::comma)) {
+      IdentifiersStream << ',';
+    }
+  } while (Tok.isNot(tok::eod));
+  IdentifiersStream << '"';
+
+  Token FuncNameTok;
+  FuncNameTok.startToken();
+  FuncNameTok.setKind(tok::identifier);
+
+  FuncNameTok.setIdentifierInfo(PP.getIdentifierInfo(FunctionName));
+  FuncNameTok.setLocation(DirectiveLocation);
+
+  Token LParTok;
+  LParTok.startToken();
+  LParTok.setKind(tok::l_paren);
+  LParTok.setLocation(DirectiveLocation.getLocWithOffset(6));
+
+  Token RParTok;
+  RParTok.startToken();
+  RParTok.setKind(tok::r_paren);
+
+  Token SemiTok;
+  SemiTok.startToken();
+  SemiTok.setKind(tok::semi);
+
+  Token StringifiedIdentifiers;
+  StringifiedIdentifiers.startToken();
+  StringifiedIdentifiers.setKind(tok::string_literal);
+  std::string IdentifiersString = IdentifiersStream.str();
+  PP.CreateString(IdentifiersString.c_str(), StringifiedIdentifiers,
+                  CurrentLocation, CurrentLocation);
+  StringifiedIdentifiers.setLength(IdentifiersString.size());
+
+  TokenQueue.push_back(FuncNameTok);
+  TokenQueue.push_back(LParTok);
+  // probably set location of instrumentated tokens bad idea, bcs
+  // location only involved in diagnostics output that bases on source file
+  CurrentLocation = CurrentLocation.getLocWithOffset(FunctionName.size() + 1);
+  StringifiedIdentifiers.setLocation(CurrentLocation);
+  TokenQueue.push_back(StringifiedIdentifiers);
+
+
+  CurrentLocation = CurrentLocation.getLocWithOffset(0);
+
+  RParTok.setLocation(CurrentLocation);
+  SemiTok.setLocation(CurrentLocation.getLocWithOffset(1));
+  TokenQueue.push_back(RParTok);
+  TokenQueue.push_back(SemiTok);
+
+  // finally prepare memory, insert tokens in memory and feed the stream
+  std::unique_ptr<Token[]> TokenArray(new Token[TokenQueue.size()]);
+  std::move(TokenQueue.begin(), TokenQueue.end(), TokenArray.get());
+
+  PP.EnterTokenStream(std::move(TokenArray), TokenQueue.size(),
+                      /*DisableMacroExpansion=*/true,
+                      /*IsReinject=*/false);
+}
+
 void DvmActualReplacer::HandlePragma(clang::Preprocessor &PP,
     clang::PragmaIntroducer Introducer, clang::Token &FirstToken) {
 
-  llvm::outs() << "DvmActualReplacer::HandlePragma  clasuses ";
-  llvm::SmallVector<clang::Token, 32> TokenQueue;
+  ReplacePragmaWithCall(PP, RegPragmaFunctionName, FirstToken);
 
-  ReplacePragmaWithCall(TokenQueue, PP, RegPragmaFunctionName, FirstToken);
-
-  llvm::outs()<<" Pragma done\n";
-  for(auto it = TokenQueue.begin(); it != TokenQueue.end(); it++){
-      llvm::outs()<<tok::getTokenName(it->getKind())<<' ';
-      if(it->getKind() == tok::string_literal)
-        llvm::outs() << '{' << it->getLiteralData() << '}' << ' ';
-      if(it->getKind() == tok::identifier)
-        llvm::outs() << '{' << it->getIdentifierInfo()->getName() << '}' << ' ';
-  }
-  llvm::outs()<<'\n';
-  PP.EnterTokenStream(TokenQueue, true, false);
-
-  llvm::outs()<<"pushed it \n";
 }
+
+void DvmGetActualReplacer::HandlePragma(clang::Preprocessor &PP,
+                                        clang::PragmaIntroducer Introducer,
+                                        clang::Token &FirstToken) {
+
+  ReplacePragmaWithCall(PP, RegPragmaFunctionName, FirstToken);
+}
+
 }
