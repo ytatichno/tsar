@@ -322,7 +322,7 @@ class DvmActualReplacer :
   public clang::PragmaHandler {
 
 public:
-  inline static const std::string RegPragmaFunctionName = "sapforRegActual";
+  inline static const llvm::StringRef RegPragmaFunctionName{"sapforRegActual"};
   DvmActualReplacer() : clang::PragmaHandler("actual") {}
   ~DvmActualReplacer() override { }
 
@@ -343,15 +343,12 @@ class DvmGetActualReplacer :
   public clang::PragmaHandler {
 
 public:
-  inline static const std::string RegPragmaFunctionName = "sapforRegGetActual";
+  inline static const llvm::StringRef RegPragmaFunctionName{"sapforRegGetActual"};
 
   DvmGetActualReplacer() : clang::PragmaHandler("get_actual") { }
   ~DvmGetActualReplacer() override { }
   void HandlePragma(clang::Preprocessor &PP,
-    clang::PragmaIntroducer Introducer, clang::Token &FirstToken) override {
-    llvm::outs() << "GetActual FirstToken: "
-      << FirstToken.getName() << '\n';
-  }
+    clang::PragmaIntroducer Introducer, clang::Token &FirstToken) override;
 
 };
 
