@@ -642,8 +642,10 @@ void Tool::storeCLOptions() {
   mMergeAST = mEmitAST ?
     addLLIfSet(addIfSet(Options::get().MergeAST)) :
     addLLIfSet(Options::get().MergeAST);
-  mPrintAST = addLLIfSet(addIfSet(Options::get().PrintAST));
-  mDumpAST = addLLIfSet(addIfSet(Options::get().DumpAST));
+  // mPrintAST = addLLIfSet(addIfSet(Options::get().PrintAST));
+  mPrintAST = Options::get().PrintAST;
+  // mDumpAST = addLLIfSet(addIfSet(Options::get().DumpAST));
+  mDumpAST = Options::get().DumpAST;
   mOutputPasses = Options::get().OutputPasses;
   mEmitLLVM = addIfSet(Options::get().EmitLLVM);
   mInstrLLVM = addIfSet(Options::get().InstrLLVM);
@@ -844,25 +846,36 @@ int Tool::run(QueryManager *QM) {
   }
   ClangTool CTool(*mCompilations, CSources);
   if (mDumpAST)
-    return CTool.run(
-        newClangActionFactory<tsar::ASTDumpAction, tsar::GenPCHPragmaAction>()
-            .get());
+    if (mInstrOptRegionExchange) {
+      return CTool.run(
+          newClangActionFactory<tsar::ASTDumpAction, AddPragmaHandlersAction>()
+              .get());
+    } else {
+      return CTool.run(
+          newClangActionFactory<tsar::ASTDumpAction, tsar::GenPCHPragmaAction>()
+              .get());
+    }
   if (mPrintAST)
-    return CTool.run(
-        newClangActionFactory<tsar::ASTPrintAction, tsar::GenPCHPragmaAction>()
-            .get());
+    if (mInstrOptRegionExchange) {
+      return CTool.run(
+          newClangActionFactory<tsar::ASTPrintAction, AddPragmaHandlersAction>()
+              .get());
+    } else {
+      return CTool.run(newClangActionFactory<tsar::ASTPrintAction,
+                                             tsar::GenPCHPragmaAction>()
+                           .get());
+    }
 
   int CRes = 0;
-  if(mInstrOptRegionExchange){
-    CRes =
-      CTool.run(newClangActionFactory<ClangMainAction, AddPragmaHandlersAction>(
-                    std::forward_as_tuple(*mCompilations, *QM))
-                    .get());
+  if (mInstrOptRegionExchange) {
+    CRes = CTool.run(
+        newClangActionFactory<ClangMainAction, AddPragmaHandlersAction>(
+            std::forward_as_tuple(*mCompilations, *QM))
+            .get());
   } else {
-    CRes =
-        CTool.run(newClangActionFactory<ClangMainAction, GenPCHPragmaAction>(
-                      std::forward_as_tuple(*mCompilations, *QM))
-                      .get());
+    CRes = CTool.run(newClangActionFactory<ClangMainAction, GenPCHPragmaAction>(
+                         std::forward_as_tuple(*mCompilations, *QM))
+                         .get());
   }
   int FortranRes{0};
 #ifdef FLANG_FOUND
