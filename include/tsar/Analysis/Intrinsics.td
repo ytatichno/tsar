@@ -132,10 +132,3 @@ def ast_reg_var : Intrinsic<"sapforASTRegVar",
                         tsar_void_ty,
                         [tsar_addr_ty]>;
 
-def reg_actual : Intrinsic<"sapforRegActual",
-                        tsar_void_ty,
-                        [tsar_di_string_ty]>;
-
-def reg_get_actual : Intrinsic<"sapforRegGetActual",
-                        tsar_void_ty,
-                        [tsar_di_string_ty]>;

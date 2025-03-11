@@ -25,8 +25,10 @@
 #include "tsar/Frontend/Clang/PragmaHandlers.h"
 #include "tsar/Frontend/Clang/ClauseVisitor.h"
 #include "tsar/Frontend/Clang/ExternalPreprocessor.h"
+#include "tsar/Support/Tags.h"
+#include "clang/Basic/TokenKinds.h"
+#include "clang/Lex/Token.h"
 #include <sstream>
-
 
 using namespace clang;
 using namespace llvm;
@@ -37,7 +39,7 @@ using namespace tsar;
 
 namespace {
 inline void AddToken(tok::TokenKind K, SourceLocation Loc, unsigned Len,
-    SmallVectorImpl<Token> &TokenList) {
+                     SmallVectorImpl<Token> &TokenList) {
 
   Token Tok;
   Tok.startToken();
@@ -47,31 +49,34 @@ inline void AddToken(tok::TokenKind K, SourceLocation Loc, unsigned Len,
   TokenList.push_back(Tok);
 }
 
-template<class PreprocessorT >
+template <class PreprocessorT>
 inline void AddStringToken(StringRef Str, SourceLocation Loc, PreprocessorT &PP,
-    SmallVectorImpl<Token> &TokenList) {
+                           SmallVectorImpl<Token> &TokenList) {
   Token Tok;
   Tok.startToken();
   Tok.setKind(tok::string_literal);
-  PP.CreateString(("\"" + Str + "\"").str(), Tok, Loc, Loc.getLocWithOffset(Str.size()+2));
-  Tok.setLength(Str.size()+2);
+  PP.CreateString(("\"" + Str + "\"").str(), Tok, Loc,
+                  Loc.getLocWithOffset(Str.size() + 2));
+  Tok.setLength(Str.size() + 2);
   TokenList.push_back(Tok);
 }
 
-template<class PreprocessorT, class ReplacementT>
-class DefaultClauseVisitor :
-  public ClauseVisitor<PreprocessorT, ReplacementT,
-      DefaultClauseVisitor<PreprocessorT, ReplacementT>> {
-  using BaseT = ClauseVisitor<PreprocessorT, ReplacementT,
-      DefaultClauseVisitor<PreprocessorT, ReplacementT>>;
+template <class PreprocessorT, class ReplacementT>
+class DefaultClauseVisitor
+    : public ClauseVisitor<PreprocessorT, ReplacementT,
+                           DefaultClauseVisitor<PreprocessorT, ReplacementT>> {
+  using BaseT =
+      ClauseVisitor<PreprocessorT, ReplacementT,
+                    DefaultClauseVisitor<PreprocessorT, ReplacementT>>;
+
 public:
   /// Creates visitor.
-  DefaultClauseVisitor(PreprocessorT &PP, ReplacementT &Replacement) :
-    BaseT(PP, Replacement), mLangOpts(PP.getLangOpts()) {}
+  DefaultClauseVisitor(PreprocessorT &PP, ReplacementT &Replacement)
+      : BaseT(PP, Replacement), mLangOpts(PP.getLangOpts()) {}
 
-  using BaseT::getReplacement;
   using BaseT::getLevelKind;
   using BaseT::getPreprocessor;
+  using BaseT::getReplacement;
 
   void visitEK_Anchor(Token &Tok) {
     if (getLevelKind() == ClauseExpr::EK_One) {
@@ -99,8 +104,8 @@ public:
     // length array:
     // int N;
     // double A[N];
-    // (void)(sizeof(A)) // This produces LLVM IR which computes size in dynamic.
-    // (void)(sizeof((void)(A))) // This does not produce LLVM IR.
+    // (void)(sizeof(A)) // This produces LLVM IR which computes size in
+    // dynamic. (void)(sizeof((void)(A))) // This does not produce LLVM IR.
     // However it is forbidden to apply 'sizeof' to the void type in C++,
     // it is also forbidden to apply 'sizeof' to a function type in C++.
     // It is also forbidden to cast aggregate types to void and arithmetic
@@ -146,19 +151,19 @@ public:
 private:
   const LangOptions &mLangOpts;
 };
-}
+} // namespace
 
 namespace tsar {
 
-PragmaReplacer::PragmaReplacer(DirectiveId Id, PragmaNamespaceReplacer &Parent) :
-  mName(tsar::getName(Id).str()),
-  mDirectiveId(Id), mParent(&Parent) {
-assert(tsar::getParent(Id) == Parent.getNamespaceId() &&
-  "Incompatible namespace and directive IDs!");
+PragmaReplacer::PragmaReplacer(DirectiveId Id, PragmaNamespaceReplacer &Parent)
+    : mName(tsar::getName(Id).str()), mDirectiveId(Id), mParent(&Parent) {
+  assert(tsar::getParent(Id) == Parent.getNamespaceId() &&
+         "Incompatible namespace and directive IDs!");
 }
 
-void PragmaNamespaceReplacer::HandlePragma(
-  Preprocessor &PP, PragmaIntroducer Introducer, Token &FirstToken) {
+void PragmaNamespaceReplacer::HandlePragma(Preprocessor &PP,
+                                           PragmaIntroducer Introducer,
+                                           Token &FirstToken) {
   mTokenQueue.clear();
   auto NamespaceLoc = FirstToken.getLocation();
   PP.LexUnexpandedToken(FirstToken);
@@ -174,7 +179,8 @@ void PragmaNamespaceReplacer::HandlePragma(
   DirectiveId Id;
   if (!getTsarDirective(mNamespaceId, DirectiveName, Id)) {
     toDiag(PP.getDiagnostics(), FirstToken.getLocation(),
-      tsar::diag::err_unknown_directive) << getName() << DirectiveName;
+           tsar::diag::err_unknown_directive)
+        << getName() << DirectiveName;
     return;
   }
   auto *Handler = FindHandler(DirectiveName, false);
@@ -201,7 +207,8 @@ void PragmaNamespaceReplacer::HandlePragma(
 }
 
 void PragmaReplacer::HandlePragma(ExternalPreprocessor &PP,
-    PragmaIntroducerKind Introducer, Token &FirstToken) {
+                                  PragmaIntroducerKind Introducer,
+                                  Token &FirstToken) {
   assert(mParent && "Parent handler must not be null!");
   auto DirectiveLoc = FirstToken.getLocation();
   AddToken(tok::l_brace, DirectiveLoc, 1, getReplacement());
@@ -228,7 +235,8 @@ void PragmaReplacer::HandlePragma(ExternalPreprocessor &PP,
     ClauseId Id;
     if (!getTsarClause(mDirectiveId, ClauseName, Id)) {
       toDiag(PP.getDiagnostics(), FirstToken.getLocation(),
-        diag::err_unknown_clause) << getName() << ClauseName;
+             diag::err_unknown_clause)
+          << getName() << ClauseName;
       return;
     }
     auto *ClauseHandler = FindHandler(ClauseName, false);
@@ -238,7 +246,7 @@ void PragmaReplacer::HandlePragma(ExternalPreprocessor &PP,
     }
     ClauseHandler->HandleClause(PP, Introducer, FirstToken);
     assert(!PP.isBacktrackEnabled() &&
-      "Did you forget to call CommitBacktrackedTokens() or Backtrack()?");
+           "Did you forget to call CommitBacktrackedTokens() or Backtrack()?");
     PP.Lex(FirstToken);
   }
   AddToken(tok::r_brace, FirstToken.getLocation(), 1, getReplacement());
@@ -250,9 +258,9 @@ ClauseReplacer::ClauseReplacer(ClauseId Id, PragmaReplacer &Parent)
          "Incompatible directive and clause IDs!");
 }
 
-void ClauseReplacer::HandleClause(
-    ExternalPreprocessor &PP, PragmaIntroducerKind Introducer,
-    Token &FirstToken) {
+void ClauseReplacer::HandleClause(ExternalPreprocessor &PP,
+                                  PragmaIntroducerKind Introducer,
+                                  Token &FirstToken) {
   auto ClauseLoc = FirstToken.getLocation();
   AddToken(tok::l_brace, ClauseLoc, 1, getReplacement());
   AddStringToken(getName(), ClauseLoc, PP, getReplacement());
@@ -265,12 +273,49 @@ void ClauseReplacer::HandleClause(
 }
 
 void ClauseReplacer::HandleBody(ExternalPreprocessor &PP,
-    PragmaIntroducerKind Introducer, Token &FirstToken) {
-  LLVM_DEBUG(dbgs() << "[PRAGMA HANDLER]: process body of '" << getName() << "'\n");
+                                PragmaIntroducerKind Introducer,
+                                Token &FirstToken) {
+  LLVM_DEBUG(dbgs() << "[PRAGMA HANDLER]: process body of '" << getName()
+                    << "'\n");
   const auto Prototype = ClausePrototype::get(mClauseId);
   DefaultClauseVisitor<ExternalPreprocessor, ReplacementT> CV(PP,
                                                               getReplacement());
   CV.visitBody(Prototype.begin(), Prototype.end(), FirstToken);
+}
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const Token &Tok) {
+  // if(Tok.is(tok::comma)){
+  //   OS << ',';
+  // } else {
+    // OS << Tok.getKind();
+    const char *spelling = tok::getKeywordSpelling(Tok.getKind());
+
+    if(spelling == nullptr)
+      spelling = tok::getPunctuatorSpelling(Tok.getKind());
+
+    OS << spelling;
+  // }
+
+  if (Tok.is(tok::identifier)) {
+    if(Tok.getIdentifierInfo() != nullptr)
+      OS << '[' << Tok.getIdentifierInfo()->getName() << ']';
+  }
+
+  if(Tok.is(tok::numeric_constant)){
+    std::string num(Tok.getLiteralData(), Tok.getLength());
+    OS << '(' << num << ')';
+  }
+
+
+  return OS;
+}
+
+// template <typename T, typename S>
+void PrintTokens(llvm::SmallVectorImpl<Token> &TokenQueue){
+  for (const auto &Tok : TokenQueue) {
+    llvm::outs() << Tok << ' ';
+  }
+  llvm::outs() << "\r\n";
 }
 
 /**
@@ -295,10 +340,6 @@ void InsertDeclarationForActualInstrumentation(
   VoidTok.startToken();
   VoidTok.setKind(tok::kw_void);
 
-  Token CharTok;
-  CharTok.startToken();
-  CharTok.setKind(tok::kw_char);
-
   Token ConstTok;
   ConstTok.startToken();
   ConstTok.setKind(tok::kw_const);
@@ -306,6 +347,10 @@ void InsertDeclarationForActualInstrumentation(
   Token StarTok;
   StarTok.startToken();
   StarTok.setKind(tok::star);
+
+  Token FloatTok;
+  FloatTok.startToken();
+  FloatTok.setKind(tok::kw_float);
 
   Token CommaTok;
   CommaTok.startToken();
@@ -319,9 +364,17 @@ void InsertDeclarationForActualInstrumentation(
   EllipsisTok.startToken();
   EllipsisTok.setKind(tok::ellipsis);
 
+  Token PeriodTok;
+  PeriodTok.startToken();
+  PeriodTok.setKind(tok::period);
+
   Token RParTok;
   RParTok.startToken();
   RParTok.setKind(tok::r_paren);
+
+  Token IntTok;
+  IntTok.startToken();
+  IntTok.setKind(tok::kw_int);
 
   Token SemiTok;
   SemiTok.startToken();
@@ -331,9 +384,81 @@ void InsertDeclarationForActualInstrumentation(
   TokenQueue.push_back(VoidTok);
   TokenQueue.push_back(FuncNameTok);
   TokenQueue.push_back(LParTok);
-  TokenQueue.push_back(ConstTok); // may be char const* instead
-  TokenQueue.push_back(CharTok);
+
+  // TokenQueue.push_back(ConstTok); // may be char const* instead
+  TokenQueue.push_back(VoidTok);
   TokenQueue.push_back(StarTok);
+  TokenQueue.push_back(CommaTok);
+  // TokenQueue.push_back(CommaTok);
+  // TokenQueue.push_back(CommaTok);
+
+  TokenQueue.push_back(IntTok);
+  TokenQueue.push_back(CommaTok);
+  // TokenQueue.push_back(IntTok);
+  // TokenQueue.push_back(CommaTok);
+  // TokenQueue.push_back(IntTok);
+  // TokenQueue.push_back(CommaTok);
+  // TokenQueue.push_back(IntTok);
+  // TokenQueue.push_back(CommaTok);
+  // TokenQueue.push_back(IntTok);
+  // TokenQueue.push_back(CommaTok);
+  // TokenQueue.push_back(IntTok);
+  // TokenQueue.push_back(CommaTok);
+
+  TokenQueue.push_back(EllipsisTok); // variadic
+  // TokenQueue.push_back(CommaTok);
+  // TokenQueue.push_back(EllipsisTok); // variadic
+  // TokenQueue.push_back(PeriodTok);
+  // TokenQueue.push_back(PeriodTok);
+  // TokenQueue.push_back(PeriodTok);
+  // TokenQueue.push_back(CommaTok);
+  // TokenQueue.push_back(IntTok);
+
+  TokenQueue.push_back(RParTok);
+  TokenQueue.push_back(SemiTok);
+
+  PrintTokens(TokenQueue);
+}
+
+void InsertStaticPrefixForActualInstrumentation(
+    SmallVectorImpl<Token> &TokenQueue, IdentifierInfo *FunctionIdentifierInfo,
+    Token VarIdentifier, bool IsArray) {
+
+  Token FuncNameTok;
+  FuncNameTok.startToken();
+  FuncNameTok.setKind(tok::identifier);
+  FuncNameTok.setFlag(clang::Token::StartOfLine);
+  FuncNameTok.setIdentifierInfo(FunctionIdentifierInfo);
+
+  Token LParTok;
+  LParTok.startToken();
+  LParTok.setKind(tok::l_paren);
+  // LParTok.setLocation(DirectiveLocation.getLocWithOffset(6));
+
+  Token CommaTok;
+  CommaTok.startToken();
+  CommaTok.setKind(tok::comma);
+
+  Token IdentifierCopy;
+  IdentifierCopy.startToken();
+  IdentifierCopy.setKind(tok::identifier);
+  IdentifierCopy.setIdentifierInfo(VarIdentifier.getIdentifierInfo());
+
+  TokenQueue.push_back(FuncNameTok);
+  TokenQueue.push_back(LParTok);
+  TokenQueue.push_back(IdentifierCopy);
+}
+void InsertStaticPostfixForActualInstrumentation(
+    SmallVectorImpl<Token> &TokenQueue) {
+
+  Token RParTok;
+  RParTok.startToken();
+  RParTok.setKind(tok::r_paren);
+
+  Token SemiTok;
+  SemiTok.startToken();
+  SemiTok.setKind(tok::semi);
+  // LParTok.setLocation(DirectiveLocation.getLocWithOffset(6));
 
   TokenQueue.push_back(RParTok);
   TokenQueue.push_back(SemiTok);
@@ -350,68 +475,111 @@ void InsertDeclarationForActualInstrumentation(
 void ReplacePragmaWithCall(clang::Preprocessor &PP, StringRef FunctionName,
                            clang::Token &FirstToken) {
 
-  llvm::SmallVector<clang::Token, 32> TokenQueue;
-  InsertDeclarationForActualInstrumentation(TokenQueue,
-                                            PP.getIdentifierInfo(FunctionName));
-  std::ostringstream IdentifiersStream;
+  llvm::SmallVector<clang::Token, 64> TokenQueue;
+  llvm::SmallVector<clang::Token, 32> VariadicTokenBuffer;
+  // InsertDeclarationForActualInstrumentation(TokenQueue,
+  //                                           PP.getIdentifierInfo(FunctionName));
   SourceLocation DirectiveLocation = FirstToken.getLocation();
   SourceLocation CurrentLocation = DirectiveLocation;
   // read pragma tokens
   Token Tok;
-  IdentifiersStream << '"';
+
+  int ArgC = 0;
+  Token ArgCTok;
+  ArgCTok.startToken();
+  ArgCTok.setKind(tok::numeric_constant);
+
+  Token CommaTok;
+  CommaTok.startToken();
+  CommaTok.setKind(tok::comma);
+  // function call I want:
+  // sapforRegActual(Array, sizeof *Array, x_beg, x_end, y_beg, y_end, ...);
+
+  bool IsIdentifierParsed = false; // from first identifier to comma
+  bool IsBracketsOpened = false;   // []
+  bool IsColonParsed = false;
+  bool IsArray = false;
+  Token IdentifierBuffer;
   do {
     PP.LexUnexpandedToken(Tok);
-    if (Tok.is(tok::identifier)) {
-      IdentifiersStream << Tok.getIdentifierInfo()->getName().data();
-    } else if (Tok.is(tok::comma)) {
-      IdentifiersStream << ',';
+    if (!IsIdentifierParsed && Tok.is(tok::identifier)) {
+      IsIdentifierParsed = true;
+      VariadicTokenBuffer.clear();
+      IsArray = false;
+      IdentifierBuffer = Tok;
+      // SmallVector<Token, 32> CallTokens;
+
+    } else if ((Tok.is(tok::comma) || Tok.is(tok::r_paren)) && IsIdentifierParsed) {
+      IsIdentifierParsed = false;
+      InsertStaticPrefixForActualInstrumentation(
+          TokenQueue, PP.getIdentifierInfo(FunctionName), IdentifierBuffer, IsArray);
+
+      TokenQueue.push_back(CommaTok);
+      // add ArgC token
+      PP.CreateString(std::to_string(VariadicTokenBuffer.size()/2), ArgCTok);
+      TokenQueue.push_back(ArgCTok);
+
+      if(!VariadicTokenBuffer.empty()){
+        TokenQueue.insert(TokenQueue.end(),
+                          VariadicTokenBuffer.begin(),
+                          VariadicTokenBuffer.end()
+        );
+      }
+      InsertStaticPostfixForActualInstrumentation(TokenQueue);
+      // TokenQueue.push_back(CommaTok);
+    } else if (!IsBracketsOpened && Tok.is(tok::l_square)) {
+      IsBracketsOpened = true;
+      IsArray = true;
+      // Token BegTok
+    } else if (IsBracketsOpened && Tok.is(tok::colon)) {
+      IsColonParsed = true;
+    } else if (IsBracketsOpened && Tok.is(tok::r_square)) {
+      if (IsColonParsed) { // interval
+        IsColonParsed = false;
+      } else { // one index, should be duped
+        Token TokDup;
+        TokDup.startToken();
+        Token LastTok = VariadicTokenBuffer.back();
+        if (LastTok.is(tok::identifier)) {
+          TokDup.setKind(tok::identifier);
+          TokDup.setIdentifierInfo(LastTok.getIdentifierInfo());
+        } else if (LastTok.is(tok::numeric_constant)) {
+          TokDup.setKind(tok::numeric_constant);
+          TokDup.setLength(LastTok.getLength());
+          TokDup.setLiteralData(LastTok.getLiteralData());
+        }
+
+        VariadicTokenBuffer.push_back(CommaTok);
+        VariadicTokenBuffer.push_back(TokDup);
+        // ArgC++;
+      }
+      IsBracketsOpened = false;
+    } else if (IsIdentifierParsed && IsBracketsOpened &&
+               Tok.is(tok::identifier)) {
+      Token TokCopy;
+      TokCopy.startToken();
+      TokCopy.setKind(tok::identifier);
+      TokCopy.setIdentifierInfo(Tok.getIdentifierInfo());
+
+      VariadicTokenBuffer.push_back(CommaTok);
+      VariadicTokenBuffer.push_back(TokCopy);
+
+    } else if (IsIdentifierParsed && IsBracketsOpened &&
+               Tok.is(tok::numeric_constant)) {
+      Token TokCopy;
+      TokCopy.startToken();
+      TokCopy.setKind(tok::numeric_constant);
+      TokCopy.setLength(Tok.getLength());
+      TokCopy.setLiteralData(Tok.getLiteralData());
+
+      VariadicTokenBuffer.push_back(CommaTok);
+      VariadicTokenBuffer.push_back(TokCopy);
     }
+
   } while (Tok.isNot(tok::eod));
-  IdentifiersStream << '"';
-
-  Token FuncNameTok;
-  FuncNameTok.startToken();
-  FuncNameTok.setKind(tok::identifier);
-
-  FuncNameTok.setIdentifierInfo(PP.getIdentifierInfo(FunctionName));
-  FuncNameTok.setLocation(DirectiveLocation);
-
-  Token LParTok;
-  LParTok.startToken();
-  LParTok.setKind(tok::l_paren);
-  LParTok.setLocation(DirectiveLocation.getLocWithOffset(6));
-
-  Token RParTok;
-  RParTok.startToken();
-  RParTok.setKind(tok::r_paren);
-
-  Token SemiTok;
-  SemiTok.startToken();
-  SemiTok.setKind(tok::semi);
-
-  Token StringifiedIdentifiers;
-  StringifiedIdentifiers.startToken();
-  StringifiedIdentifiers.setKind(tok::string_literal);
-  std::string IdentifiersString = IdentifiersStream.str();
-  PP.CreateString(IdentifiersString.c_str(), StringifiedIdentifiers,
-                  CurrentLocation, CurrentLocation);
-  StringifiedIdentifiers.setLength(IdentifiersString.size());
-
-  TokenQueue.push_back(FuncNameTok);
-  TokenQueue.push_back(LParTok);
-  // probably set location of instrumentated tokens bad idea, bcs
-  // location only involved in diagnostics output that bases on source file
-  CurrentLocation = CurrentLocation.getLocWithOffset(FunctionName.size() + 1);
-  StringifiedIdentifiers.setLocation(CurrentLocation);
-  TokenQueue.push_back(StringifiedIdentifiers);
 
 
-  CurrentLocation = CurrentLocation.getLocWithOffset(0);
-
-  RParTok.setLocation(CurrentLocation);
-  SemiTok.setLocation(CurrentLocation.getLocWithOffset(1));
-  TokenQueue.push_back(RParTok);
-  TokenQueue.push_back(SemiTok);
+  PrintTokens(TokenQueue);
 
   // finally prepare memory, insert tokens in memory and feed the stream
   std::unique_ptr<Token[]> TokenArray(new Token[TokenQueue.size()]);
@@ -423,10 +591,10 @@ void ReplacePragmaWithCall(clang::Preprocessor &PP, StringRef FunctionName,
 }
 
 void DvmActualReplacer::HandlePragma(clang::Preprocessor &PP,
-    clang::PragmaIntroducer Introducer, clang::Token &FirstToken) {
+                                     clang::PragmaIntroducer Introducer,
+                                     clang::Token &FirstToken) {
 
   ReplacePragmaWithCall(PP, RegPragmaFunctionName, FirstToken);
-
 }
 
 void DvmGetActualReplacer::HandlePragma(clang::Preprocessor &PP,
@@ -436,4 +604,4 @@ void DvmGetActualReplacer::HandlePragma(clang::Preprocessor &PP,
   ReplacePragmaWithCall(PP, RegPragmaFunctionName, FirstToken);
 }
 
-}
+} // namespace tsar

@@ -209,7 +209,7 @@ public:
 
   /// Handles namespace name and forwards processing of subsequent tokens
   /// to child handlers of directives.
-  /// overrides @ref claang::PragmaHandler::HandlePragma
+  /// overrides @ref clang::PragmaHandler::HandlePragma
   void HandlePragma(clang::Preprocessor &PP,
     clang::PragmaIntroducer Introducer, clang::Token &FirstToken) override;
 
