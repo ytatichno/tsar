@@ -25,6 +25,7 @@
 #ifndef TSAR_SUPPORT_IR_UTILS_H
 #define TSAR_SUPPORT_IR_UTILS_H
 
+#include <cstdint>
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Type.h>
@@ -42,16 +43,21 @@ inline unsigned dimensionsNum(const llvm::Type *Ty) {
 }
 
 /// Returns number of dimensions and elements in a specified type and type of
-/// innermost array element. If `Ty` is not an array type this function returns
-/// 0,1, Ty.
-inline std::tuple<unsigned, uint64_t, llvm::Type *>
+/// innermost array element. Also returns vector with all dimensions,
+/// dyna requires this information for actual/get_actual analyzis.
+///If `Ty` is not an array type this function returns 0, 1, Ty, std::vector().
+inline std::tuple<unsigned, uint64_t, llvm::Type *, std::vector<uint64_t>>
 arraySize(llvm::Type *Ty) {
   assert(Ty && "Type must not be null!");
   unsigned Dims = 0;
   uint64_t NumElements = 1;
-  for (; Ty->isArrayTy(); Ty = Ty->getArrayElementType(), ++Dims)
-    NumElements *= llvm::cast<llvm::ArrayType>(Ty)->getArrayNumElements();
-  return std::make_tuple(Dims, NumElements, Ty);
+  auto DimsVector = std::vector<uint64_t>();
+  for (; Ty->isArrayTy(); Ty = Ty->getArrayElementType(), ++Dims){
+    auto DimSize = llvm::cast<llvm::ArrayType>(Ty)->getArrayNumElements();
+    NumElements *= DimSize;
+    DimsVector.push_back(DimSize);
+  }
+  return std::make_tuple(Dims, NumElements, Ty, std::move(DimsVector));
 }
 
 /// Return true if a specified type is a pointer type or contains sub-types

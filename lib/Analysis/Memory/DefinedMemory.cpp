@@ -33,6 +33,7 @@
 #include "tsar/Support/IRUtils.h"
 #include "tsar/Support/SCEVUtils.h"
 #include "tsar/Unparse/Utils.h"
+#include <cstdint>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/Analysis/AliasAnalysis.h>
 #include <llvm/Analysis/AliasSetTracker.h>
@@ -48,6 +49,7 @@
 #include <llvm/IR/InstIterator.h>
 #include <llvm/Support/Debug.h>
 #include <functional>
+#include <vector>
 
 using namespace llvm;
 using namespace tsar;
@@ -275,7 +277,7 @@ std::pair<MemoryLocationRange, bool> aggregate(
   LLVM_DEBUG(dbgs() << "[AGGREGATE] Element type: " <<
       ArrayType->getTypeID() << ".\n");
   auto ArraySizeInfo = arraySize(ArrayType);
-  if (ArraySizeInfo == std::make_tuple(0, 1, ArrayType) &&
+  if (ArraySizeInfo == std::make_tuple(0, 1, ArrayType, std::vector<uint64_t>()) &&
       ArrayPtr->getNumberOfDims() != 1) {
     LLVM_DEBUG(dbgs() << "[AGGREGATE] Failed to get array size.\n");
     ResLoc.Kind = LocKind::NonCollapsable;

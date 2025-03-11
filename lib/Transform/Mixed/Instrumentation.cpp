@@ -38,6 +38,8 @@
 #include "tsar/Transform/IR/MetadataUtils.h"
 #include "tsar/Transform/IR/Utils.h"
 #include "tsar/Unparse/SourceUnparserUtils.h"
+#include <cstdint>
+#include <llvm-15/llvm/ADT/Twine.h>
 #include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/CallGraph.h>
 #include <llvm/Analysis/LoopInfo.h>
@@ -54,6 +56,7 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/ScalarEvolutionExpander.h>
+#include <string>
 #include <vector>
 
 using namespace llvm;
@@ -1124,13 +1127,22 @@ void Instrumentation::regValueArgs(Value *V, Type *T,
     }
   unsigned Rank;
   uint64_t ArraySizeFromTy;
-  Type *ElTy;
-  std::tie(Rank, ArraySizeFromTy, ElTy) = arraySize(T);
+  llvm::Type *ElTy;
+  std::vector<uint64_t> DimsVector;
+  std::tie(Rank, ArraySizeFromTy, ElTy, DimsVector) = arraySize(T);
   if (!isa<ConstantInt>(ArraySize) || !cast<ConstantInt>(ArraySize)->isOne())
       ++Rank;
   unsigned TypeId = mTypes.regItem(ElTy).first;
-  auto TypeStr = Rank == 0 ? (Twine("var_name") + "*").str() :
-    (Twine("arr_name") + "*" + "rank=" + Twine(Rank) + "*").str();
+  std::string TypeStr;
+  if(Rank == 0){
+    TypeStr = "var_name*";
+  } else {
+    std::string DimsStr = "dims=";
+    for (const auto DimSize : DimsVector) {
+        DimsStr += ("[" + Twine(DimSize) + "]").str();
+    }
+    TypeStr = (Twine("arr_name*") + "rank=" + Twine(Rank) + "*" + Twine(DimsStr) + "*").str();
+  }
   createInitDICall(
     Twine("type=") + TypeStr +
     "vtype=" + Twine(TypeId) + "*" + DeclStr + NameStr +
