@@ -347,6 +347,9 @@ private:
   /// and its operands, it each of 'Form' and the operands has single use.
   void setMDForSingleUseInstructions(llvm::Instruction *From);
 
+  void regPragmaActualCall(const std::string &Filename, unsigned int Line, DIStringRegister::IdTy Idx);
+  void regPragmaGetActualCall(const std::string &Filename, unsigned int Line, DIStringRegister::IdTy Idx);
+
   llvm::InstrumentationPass *mInstrPass = nullptr;
   TypeRegister mTypes;
   DIStringRegister mDIStrings;

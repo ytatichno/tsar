@@ -26,6 +26,8 @@
 #include "tsar/Frontend/Clang/ClauseVisitor.h"
 #include "tsar/Frontend/Clang/ExternalPreprocessor.h"
 #include "tsar/Support/Tags.h"
+#include "clang/Basic/SourceLocation.h"
+#include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TokenKinds.h"
 #include "clang/Lex/Token.h"
 #include <sstream>
@@ -386,78 +388,78 @@ void InsertDeclarationForActualInstrumentation(
   TokenQueue.push_back(LParTok);
 
   // TokenQueue.push_back(ConstTok); // may be char const* instead
+
+  // this one for CS pointer
   TokenQueue.push_back(VoidTok);
   TokenQueue.push_back(StarTok);
   TokenQueue.push_back(CommaTok);
-  // TokenQueue.push_back(CommaTok);
-  // TokenQueue.push_back(CommaTok);
+
+  // this one for var name string literal
+  TokenQueue.push_back(VoidTok);
+  TokenQueue.push_back(StarTok);
+  TokenQueue.push_back(CommaTok);
 
   TokenQueue.push_back(IntTok);
   TokenQueue.push_back(CommaTok);
-  // TokenQueue.push_back(IntTok);
-  // TokenQueue.push_back(CommaTok);
-  // TokenQueue.push_back(IntTok);
-  // TokenQueue.push_back(CommaTok);
-  // TokenQueue.push_back(IntTok);
-  // TokenQueue.push_back(CommaTok);
-  // TokenQueue.push_back(IntTok);
-  // TokenQueue.push_back(CommaTok);
-  // TokenQueue.push_back(IntTok);
-  // TokenQueue.push_back(CommaTok);
 
   TokenQueue.push_back(EllipsisTok); // variadic
-  // TokenQueue.push_back(CommaTok);
-  // TokenQueue.push_back(EllipsisTok); // variadic
-  // TokenQueue.push_back(PeriodTok);
-  // TokenQueue.push_back(PeriodTok);
-  // TokenQueue.push_back(PeriodTok);
-  // TokenQueue.push_back(CommaTok);
-  // TokenQueue.push_back(IntTok);
 
   TokenQueue.push_back(RParTok);
   TokenQueue.push_back(SemiTok);
 
-  PrintTokens(TokenQueue);
+  // PrintTokens(TokenQueue);
 }
 
 void InsertStaticPrefixForActualInstrumentation(
     SmallVectorImpl<Token> &TokenQueue, IdentifierInfo *FunctionIdentifierInfo,
-    Token VarIdentifier, bool IsArray) {
+    Token VarIdentifier, bool IsArray, SourceLocation &Loc) {
 
   Token FuncNameTok;
   FuncNameTok.startToken();
   FuncNameTok.setKind(tok::identifier);
   FuncNameTok.setFlag(clang::Token::StartOfLine);
   FuncNameTok.setIdentifierInfo(FunctionIdentifierInfo);
+  FuncNameTok.setLocation(Loc);
 
   Token LParTok;
   LParTok.startToken();
   LParTok.setKind(tok::l_paren);
-  // LParTok.setLocation(DirectiveLocation.getLocWithOffset(6));
+  LParTok.setLocation(Loc);
+
+  Token NullTok;
+  NullTok.startToken();
+  NullTok.setKind(tok::kw_nullptr);
+  NullTok.setLocation(Loc);
 
   Token CommaTok;
   CommaTok.startToken();
   CommaTok.setKind(tok::comma);
+  CommaTok.setLocation(Loc);
 
   Token IdentifierCopy;
   IdentifierCopy.startToken();
   IdentifierCopy.setKind(tok::identifier);
   IdentifierCopy.setIdentifierInfo(VarIdentifier.getIdentifierInfo());
+  IdentifierCopy.setLocation(Loc);
 
   TokenQueue.push_back(FuncNameTok);
   TokenQueue.push_back(LParTok);
+  TokenQueue.push_back(NullTok);
+  TokenQueue.push_back(CommaTok);
   TokenQueue.push_back(IdentifierCopy);
 }
 void InsertStaticPostfixForActualInstrumentation(
-    SmallVectorImpl<Token> &TokenQueue) {
+    SmallVectorImpl<Token> &TokenQueue, SourceLocation &Loc) {
 
   Token RParTok;
   RParTok.startToken();
   RParTok.setKind(tok::r_paren);
+  RParTok.setLocation(Loc);
 
   Token SemiTok;
   SemiTok.startToken();
   SemiTok.setKind(tok::semi);
+  SemiTok.setLocation(Loc);
   // LParTok.setLocation(DirectiveLocation.getLocWithOffset(6));
 
   TokenQueue.push_back(RParTok);
@@ -479,6 +481,8 @@ void ReplacePragmaWithCall(clang::Preprocessor &PP, StringRef FunctionName,
   llvm::SmallVector<clang::Token, 32> VariadicTokenBuffer;
   // InsertDeclarationForActualInstrumentation(TokenQueue,
   //                                           PP.getIdentifierInfo(FunctionName));
+
+  // PrintTokens(TokenQueue);
   SourceLocation DirectiveLocation = FirstToken.getLocation();
   SourceLocation CurrentLocation = DirectiveLocation;
   // read pragma tokens
@@ -488,10 +492,12 @@ void ReplacePragmaWithCall(clang::Preprocessor &PP, StringRef FunctionName,
   Token ArgCTok;
   ArgCTok.startToken();
   ArgCTok.setKind(tok::numeric_constant);
+  ArgCTok.setLocation(CurrentLocation);
 
   Token CommaTok;
   CommaTok.startToken();
   CommaTok.setKind(tok::comma);
+  CommaTok.setLocation(CurrentLocation);
   // function call I want:
   // sapforRegActual(Array, sizeof *Array, x_beg, x_end, y_beg, y_end, ...);
 
@@ -512,7 +518,7 @@ void ReplacePragmaWithCall(clang::Preprocessor &PP, StringRef FunctionName,
     } else if ((Tok.is(tok::comma) || Tok.is(tok::r_paren)) && IsIdentifierParsed) {
       IsIdentifierParsed = false;
       InsertStaticPrefixForActualInstrumentation(
-          TokenQueue, PP.getIdentifierInfo(FunctionName), IdentifierBuffer, IsArray);
+          TokenQueue, PP.getIdentifierInfo(FunctionName), IdentifierBuffer, IsArray, CurrentLocation);
 
       TokenQueue.push_back(CommaTok);
       // add ArgC token
@@ -525,7 +531,7 @@ void ReplacePragmaWithCall(clang::Preprocessor &PP, StringRef FunctionName,
                           VariadicTokenBuffer.end()
         );
       }
-      InsertStaticPostfixForActualInstrumentation(TokenQueue);
+      InsertStaticPostfixForActualInstrumentation(TokenQueue, CurrentLocation);
       // TokenQueue.push_back(CommaTok);
     } else if (!IsBracketsOpened && Tok.is(tok::l_square)) {
       IsBracketsOpened = true;
@@ -539,6 +545,7 @@ void ReplacePragmaWithCall(clang::Preprocessor &PP, StringRef FunctionName,
       } else { // one index, should be duped
         Token TokDup;
         TokDup.startToken();
+        TokDup.setLocation(CurrentLocation);
         Token LastTok = VariadicTokenBuffer.back();
         if (LastTok.is(tok::identifier)) {
           TokDup.setKind(tok::identifier);
@@ -560,6 +567,7 @@ void ReplacePragmaWithCall(clang::Preprocessor &PP, StringRef FunctionName,
       TokCopy.startToken();
       TokCopy.setKind(tok::identifier);
       TokCopy.setIdentifierInfo(Tok.getIdentifierInfo());
+      TokCopy.setLocation(CurrentLocation);
 
       VariadicTokenBuffer.push_back(CommaTok);
       VariadicTokenBuffer.push_back(TokCopy);
@@ -579,7 +587,7 @@ void ReplacePragmaWithCall(clang::Preprocessor &PP, StringRef FunctionName,
   } while (Tok.isNot(tok::eod));
 
 
-  PrintTokens(TokenQueue);
+  // PrintTokens(TokenQueue);
 
   // finally prepare memory, insert tokens in memory and feed the stream
   std::unique_ptr<Token[]> TokenArray(new Token[TokenQueue.size()]);

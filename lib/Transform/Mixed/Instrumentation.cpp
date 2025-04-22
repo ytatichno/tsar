@@ -749,6 +749,8 @@ void Instrumentation::regArgs(Function &F, LoadInst *DIFunc) {
 }
 
 void Instrumentation::visitCallBase(llvm::CallBase &Call) {
+  const char *name = Call.getCalledFunction() == nullptr ? "null" : Call.getCalledFunction()->getName().data();
+
   if (isDbgInfoIntrinsic(Call.getIntrinsicID()) ||
       isMemoryMarkerIntrinsic(Call.getIntrinsicID()))
     return;
@@ -762,9 +764,24 @@ void Instrumentation::visitCallBase(llvm::CallBase &Call) {
     // for some functions of dynamic analyzer yet. However, it is necessary to
     // check for 'sapfor.da' to ignore some internal utility functions which
     // have been created.
-    if(Callee->getMetadata("sapfor.da") ||
-       getTsarLibFunc(Callee->getName(), LibId))
+    if (Callee->getMetadata("sapfor.da") ||
+        getTsarLibFunc(Callee->getName(), LibId))
       return;
+    if (Call.getCalledOperand()->getName() == "sapforRegActual") {
+      auto CalledValue = Call.getCalledOperand();
+      auto Idx = mDIStrings.regItem(static_cast<llvm::Value*>(&Call)).first;
+      regPragmaActualCall(M->getSourceFileName(), Call.getDebugLoc()->getLine(), Idx);
+      auto *CallCSPtr = createPointerToDI(Idx, Call);
+      Call.setOperand(0, CallCSPtr);
+      return;
+    } else if (Call.getCalledOperand()->getName() == "sapforRegGetActual") {
+      auto CalledValue = Call.getCalledOperand();
+      auto Idx = mDIStrings.regItem(static_cast<llvm::Value*>(&Call)).first;
+      regPragmaGetActualCall(M->getSourceFileName(), Call.getDebugLoc()->getLine(), Idx);
+      auto *CallCSPtr = createPointerToDI(Idx, Call);
+      Call.setOperand(0, CallCSPtr);
+      return;
+    }
     FuncIdx = mDIStrings[Callee];
   } else {
     auto CalledValue = Call.getCalledOperand();
@@ -1346,4 +1363,17 @@ void tsar::visitEntryPoint(Function &Entry, ArrayRef<Module *> Modules) {
       {FreeId}, "freeid", InsertBefore);
     cast<CallInst>(FreeId)->setMetadata("sapfor.da", InstrMD);
   }
+}
+
+void Instrumentation::regPragmaActualCall(const std::string &Filename, unsigned int Line, DIStringRegister::IdTy Idx){
+  createInitDICall(Twine("type=") + "actual_call" + "*" +
+    "file=" + Filename + "*" +
+    "line1=" + Twine(Line) + "*"
+    , Idx);
+}
+void Instrumentation::regPragmaGetActualCall(const std::string &Filename, unsigned int Line, DIStringRegister::IdTy Idx){
+  createInitDICall(Twine("type=") + "get_actual_call" + "*" +
+    "file=" + Filename + "*" +
+    "line1=" + Twine(Line) + "*"
+    , Idx);
 }
